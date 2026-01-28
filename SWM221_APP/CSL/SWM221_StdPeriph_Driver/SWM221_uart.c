@@ -67,6 +67,8 @@ void UART_Init(UART_TypeDef * UARTx, UART_InitStructure * initStruct)
 				   (initStruct->TXThresholdIEn << UART_CTRL_TXIE_Pos) |
 				   (initStruct->TimeoutIEn << UART_CTRL_TOIE_Pos);
 	
+	UART_INTClr(UARTx, UART_IT_RX_TOUT);
+	
 	switch((uint32_t)UARTx)
 	{
 	case ((uint32_t)UART0):		
@@ -121,11 +123,11 @@ void UART_Close(UART_TypeDef * UARTx)
 * 函数名称:	UART_WriteByte()
 * 功能说明:	发送一个字节数据
 * 输    入: UART_TypeDef * UARTx	指定要被设置的UART串口，可取值包括UART0、UART1、UART4
-*			uint8_t data			要发送的字节			
+*			uint16_t data			要发送的字节			
 * 输    出: 无
 * 注意事项: 无
 ******************************************************************************************************************************************/
-void UART_WriteByte(UART_TypeDef * UARTx, uint8_t data)
+void UART_WriteByte(UART_TypeDef * UARTx, uint16_t data)
 {
 	UARTx->DATA = data;
 }

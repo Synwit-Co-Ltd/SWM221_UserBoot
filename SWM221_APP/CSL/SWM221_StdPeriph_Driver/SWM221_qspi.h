@@ -109,11 +109,10 @@ typedef struct {
 
 
 /* Interrupt Type */
-#define QSPI_IT_ERR   	(1 << QSPI_CR_ERR_Pos)
-#define QSPI_IT_DONE   	(1 << QSPI_CR_DONE_Pos)
-#define QSPI_IT_FFTHR	(1 << QSPI_CR_FFTHR_Pos)
-#define QSPI_IT_PSMAT	(1 << QSPI_CR_PSMAT_Pos)
-#define QSPI_IT_TO		(1 << QSPI_CR_TOIE_Pos)
+#define QSPI_IT_ERR   	QSPI_SR_ERR_Msk
+#define QSPI_IT_DONE   	QSPI_SR_DONE_Msk
+#define QSPI_IT_FFTHR	QSPI_SR_FFTHR_Msk
+#define QSPI_IT_PSMAT	QSPI_SR_PSMAT_Msk
 
 
 
@@ -124,10 +123,14 @@ void QSPI_Close(QSPI_TypeDef * QSPIx);
 void QSPI_CmdStructClear(QSPI_CmdStructure * cmdStruct);
 void QSPI_Command(QSPI_TypeDef * QSPIx, uint8_t cmdMode, QSPI_CmdStructure * cmdStruct);
 
-void QSPI_Erase(QSPI_TypeDef * QSPIx, uint8_t cmd, uint32_t addr, uint8_t wait);
+void QSPI_Erase_(QSPI_TypeDef * QSPIx, uint32_t addr, uint16_t block_size, uint8_t wait);
+#define QSPI_Erase(QSPIx, addr, wait)				QSPI_Erase_(QSPIx, (addr),  4, (wait));
+#define QSPI_Erase_Block64KB(QSPIx, addr, wait)		QSPI_Erase_(QSPIx, (addr), 64, (wait));
+
 void QSPI_Write_(QSPI_TypeDef * QSPIx, uint32_t addr, uint8_t buff[], uint32_t count, uint8_t data_width, uint8_t data_phase);
 #define QSPI_Write(QSPIx, addr, buff, count)	   QSPI_Write_(QSPIx, (addr), (buff), (count), 1, 1)
 #define QSPI_Write_4bit(QSPIx, addr, buff, count)  QSPI_Write_(QSPIx, (addr), (buff), (count), 4, 1)
+
 void QSPI_Read_(QSPI_TypeDef * QSPIx, uint32_t addr, uint8_t buff[], uint32_t count, uint8_t addr_width, uint8_t data_width, uint8_t data_phase);
 #define QSPI_Read(QSPIx, addr, buff, count)			QSPI_Read_(QSPIx, (addr), (buff), (count), 1, 1, 1)
 #define QSPI_Read_2bit(QSPIx, addr, buff, count)	QSPI_Read_(QSPIx, (addr), (buff), (count), 1, 2, 1)
@@ -139,20 +142,25 @@ void QSPI_Read_(QSPI_TypeDef * QSPIx, uint32_t addr, uint8_t buff[], uint32_t co
 bool QSPI_FlashBusy(QSPI_TypeDef * QSPIx);
 uint8_t QSPI_QuadState(QSPI_TypeDef * QSPIx);
 void QSPI_QuadSwitch(QSPI_TypeDef * QSPIx, uint8_t on);
-void QSPI_SendCmd(QSPI_TypeDef * QSPIx, uint8_t cmd);
+
 uint32_t QSPI_ReadReg(QSPI_TypeDef * QSPIx, uint8_t cmd, uint8_t n_bytes);
 void QSPI_WriteReg(QSPI_TypeDef * QSPIx, uint8_t cmd, uint32_t data, uint8_t n_bytes);
 
 #define QSPI_ReadJEDEC(QSPIx)			QSPI_ReadReg(QSPIx, QSPI_CMD_READ_JEDEC, 3)
-#define QSPI_WriteEnable(QSPIx)			QSPI_SendCmd(QSPIx, QSPI_CMD_WRITE_ENABLE)
-#define QSPI_WriteDisable(QSPIx)		QSPI_SendCmd(QSPIx, QSPI_CMD_WRITE_DISABLE)
-#define QSPI_4ByteAddrEnable(QSPIx)		QSPI_SendCmd(QSPIx, QSPI_CMD_4BYTE_ADDR_ENTER)
-#define QSPI_4ByteAddrDisable(QSPIx)	QSPI_SendCmd(QSPIx, QSPI_CMD_4BYTE_ADDR_EXIT)
+#define QSPI_WriteEnable(QSPIx)			QSPI_WriteReg(QSPIx, QSPI_CMD_WRITE_ENABLE, 0, 0)
+#define QSPI_WriteDisable(QSPIx)		QSPI_WriteReg(QSPIx, QSPI_CMD_WRITE_DISABLE, 0, 0)
+#define QSPI_4ByteAddrEnable(QSPIx)		QSPI_WriteReg(QSPIx, QSPI_CMD_4BYTE_ADDR_ENTER, 0, 0)
+#define QSPI_4ByteAddrDisable(QSPIx)	QSPI_WriteReg(QSPIx, QSPI_CMD_4BYTE_ADDR_EXIT, 0, 0)
 
 
 static inline bool QSPI_Busy(QSPI_TypeDef * QSPIx)
 {
 	return QSPIx->SR & QSPI_SR_BUSY_Msk;
+}
+
+static inline void QSPI_Abort(QSPI_TypeDef * QSPIx)
+{
+	QSPIx->CR |= QSPI_CR_ABORT_Msk;
 }
 
 static inline uint32_t QSPI_FIFOCount(QSPI_TypeDef * QSPIx)
@@ -187,6 +195,20 @@ void QSPI_INTEn(QSPI_TypeDef * QSPIx, uint32_t it);
 void QSPI_INTDis(QSPI_TypeDef * QSPIx, uint32_t it);
 void QSPI_INTClr(QSPI_TypeDef * QSPIx, uint32_t it);
 uint32_t QSPI_INTStat(QSPI_TypeDef * QSPIx, uint32_t it);
+
+
+
+/******** QSPI use as normal SPI (half-duplex) ********/
+
+void QSPI_SPI_Write_(QSPI_TypeDef * QSPIx, uint8_t buff[], uint32_t count, uint8_t data_width, uint8_t data_phase);
+#define QSPI_SPI_Write(QSPIx, buff, count)			QSPI_SPI_Write_(QSPIx, (buff), (count), 1, 1)
+#define QSPI_SPI_Write_2bit(QSPIx, buff, count)		QSPI_SPI_Write_(QSPIx, (buff), (count), 2, 1)
+#define QSPI_SPI_Write_4bit(QSPIx, buff, count)		QSPI_SPI_Write_(QSPIx, (buff), (count), 4, 1)
+
+void QSPI_SPI_Read_(QSPI_TypeDef * QSPIx, uint8_t buff[], uint32_t count, uint8_t data_width, uint8_t data_phase);
+#define QSPI_SPI_Read(QSPIx, buff, count)			QSPI_SPI_Read_(QSPIx, (buff), (count), 1, 1)
+#define QSPI_SPI_Read_2bit(QSPIx, buff, count)		QSPI_SPI_Read_(QSPIx, (buff), (count), 2, 1)
+#define QSPI_SPI_Read_4bit(QSPIx, buff, count)		QSPI_SPI_Read_(QSPIx, (buff), (count), 4, 1)
 
 
 #endif //__SWM221_QSPI_H__

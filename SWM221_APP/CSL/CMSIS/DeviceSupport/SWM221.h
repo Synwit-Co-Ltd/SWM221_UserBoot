@@ -42,7 +42,7 @@ typedef enum IRQn
   GPIOA0_GPIOC0_IRQn        = 23,
   GPIOA1_GPIOC1_IRQn		= 24,
   GPIOA2_GPIOC2_MPU_IRQn    = 25,
-  GPIOA3_GPIOC3_BOD_IRQn    = 26,
+  GPIOA3_GPIOC3_PVD_IRQn    = 26,
   GPIOB0_GPIOA8_TIMR2_IRQn  = 27,
   GPIOB1_GPIOA9_DMA_IRQn    = 28,
   GPIOB2_GPIOA10_DIV_IRQn   = 29,
@@ -134,8 +134,8 @@ typedef struct {
 	__IO uint32_t PLLCR;
     __IO uint32_t PLLSR;
 	
-	__IO uint32_t BODCR;
-	__IO uint32_t BODSR;
+	__IO uint32_t PVDCR;
+	__IO uint32_t PVDSR;
 	
 	__IO uint32_t LVRCR;
 	
@@ -314,17 +314,17 @@ typedef struct {
 #define SYS_PLLSR_ENA_Pos			1
 #define SYS_PLLSR_ENA_Msk			(0x01 << SYS_PLLSR_ENA_Pos)
 
-#define SYS_BODCR_EN_Pos		    0		//BOD Enable
-#define SYS_BODCR_EN_Msk		    (0x01 << SYS_BODCR_EN_Pos)
-#define SYS_BODCR_LVL_Pos			1		//BOD触发电平，0 2.0v   1 2.3v   2 2.7v   3 3.0v   4 3.7v   5 4.0v   6 4.3v
-#define SYS_BODCR_LVL_Msk			(0x07 << SYS_BODCR_LVL_Pos)
-#define SYS_BODCR_IE_Pos			4		//BOD Interrupt Enable
-#define SYS_BODCR_IE_Msk			(0x01 << SYS_BODCR_IE_Pos)
+#define SYS_PVDCR_EN_Pos		    0		//PVD Enable
+#define SYS_PVDCR_EN_Msk		    (0x01 << SYS_PVDCR_EN_Pos)
+#define SYS_PVDCR_LVL_Pos			1		//PVD触发电平，0 2.0v   1 2.3v   2 2.7v   3 3.0v   4 3.7v   5 4.0v   6 4.3v
+#define SYS_PVDCR_LVL_Msk			(0x07 << SYS_PVDCR_LVL_Pos)
+#define SYS_PVDCR_IE_Pos			4		//PVD Interrupt Enable
+#define SYS_PVDCR_IE_Msk			(0x01 << SYS_PVDCR_IE_Pos)
 
-#define SYS_BODSR_ST_Pos			0		//BOD Status
-#define SYS_BODSR_ST_Msk			(0x01 << SYS_BODSR_ST_Pos)
-#define SYS_BODSR_IF_Pos			1		//中断标志，写1清零
-#define SYS_BODSR_IF_Msk			(0x01 << SYS_BODSR_IF_Pos)
+#define SYS_PVDSR_IF_Pos			0		//中断标志，写1清零
+#define SYS_PVDSR_IF_Msk			(0x01 << SYS_PVDSR_IF_Pos)
+#define SYS_PVDSR_ST_Pos			1		//PVD Status
+#define SYS_PVDSR_ST_Msk			(0x01 << SYS_PVDSR_ST_Pos)
 
 #define SYS_LVRCR_EN_Pos			0		//LVR Enable
 #define SYS_LVRCR_EN_Msk			(0x01 << SYS_LVRCR_EN_Pos)
@@ -383,7 +383,7 @@ typedef struct {
 #define SYS_PGA0CR_MODE_Msk			(0x01 << SYS_PGA0CR_MODE_Pos)
 #define SYS_PGA0CR_ROUT_Pos			2 	//输出电阻选择：0 open   1 100   2 1k   3 10k
 #define SYS_PGA0CR_ROUT_Msk			(0x03 << SYS_PGA0CR_ROUT_Pos)
-#define SYS_PGA0CR_GAIN_Pos			4 	//PGA 增益选择：0 x1   1 x5   2 x10   3 x10
+#define SYS_PGA0CR_GAIN_Pos			4 	//PGA 增益选择：0 x1   1 x5   2 x10   3 x20
 #define SYS_PGA0CR_GAIN_Msk			(0x03 << SYS_PGA0CR_GAIN_Pos)
 #define SYS_PGA0CR_BUFEN_Pos		6 	//输出 BUF 使能
 #define SYS_PGA0CR_BUFEN_Msk		(0x01 << SYS_PGA0CR_BUFEN_Pos)
@@ -416,7 +416,7 @@ typedef struct {
 #define SYS_PGA2CR_BYPASS_Pos		7
 #define SYS_PGA2CR_BYPASS_Msk		(0x01 << SYS_PGA2CR_BYPASS_Pos)
 
-#define SYS_PGAREF_REFSEL_Pos		0 		//PGA 参考电压选择：0 1.2v   1 1.5v   2 2.25v   3 ADCVREF/2
+#define SYS_PGAREF_REFSEL_Pos		0 		//PGA 参考电压选择：0 1.2v   1 1.8v   2 2.25v   3 ADCVREF/2
 #define SYS_PGAREF_REFSEL_Msk		(0x03 << SYS_PGAREF_REFSEL_Pos)
 
 #define SYS_TEMPCR_EN_Pos			0
@@ -1104,7 +1104,7 @@ typedef struct {
 #define SPI_CTRL_TFCLR_Msk			(0x01 << SPI_CTRL_TFCLR_Pos)
 #define SPI_CTRL_LSBF_Pos			28		//LSB Fisrt
 #define SPI_CTRL_LSBF_Msk			(0x01 << SPI_CTRL_LSBF_Pos)
-#define SPI_CTRL_NSYNC_Pos			29		//1 对SPI输入信号进行采样同步    0 对SPI输入信号不进行采样同步
+#define SPI_CTRL_NSYNC_Pos			29		//0 对SPI输入信号进行采样同步    1 对SPI输入信号不进行采样同步
 #define SPI_CTRL_NSYNC_Msk			(0x01 << SPI_CTRL_NSYNC_Pos)
 
 #define SPI_STAT_WTC_Pos			0		//Word Transmit Complete，每传输完成一个数据字由硬件置1，软件写1清零
@@ -2090,8 +2090,6 @@ typedef struct {
 #define QSPI_SR_FFTHR_Msk			(0x01 << QSPI_SR_FFTHR_Pos)
 #define QSPI_SR_PSMAT_Pos			3		//Polling Status Match Flag
 #define QSPI_SR_PSMAT_Msk			(0x01 << QSPI_SR_PSMAT_Pos)
-#define QSPI_SR_TO_Pos				4		//Time-Out
-#define QSPI_SR_TO_Msk				(0x01 << QSPI_SR_TO_Pos)
 #define QSPI_SR_BUSY_Pos			5		//Set when operation is on going, Clear when operation done and FIFO emtpy
 #define QSPI_SR_BUSY_Msk			(0x01 << QSPI_SR_BUSY_Pos)
 #define QSPI_SR_FFLVL_Pos			8		//FIFO Level
@@ -2648,7 +2646,6 @@ typedef struct {
 #include "SWM221_qspi.h"
 #include "SWM221_usart.h"
 #include "SWM221_flash.h"
-#include "SWM221_sleep.h"
 #include "SWM221_iofilt.h"
 
 

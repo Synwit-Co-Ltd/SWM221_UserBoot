@@ -56,7 +56,7 @@ void QSPI_Init(QSPI_TypeDef * QSPIx, QSPI_InitStructure * initStruct)
 	AddressSize = initStruct->Size / 8;
 	
 	QSPIx->SSHIFT = ((initStruct->SampleShift & 0x0F) << QSPI_SSHIFT_CYCLE_Pos) |
-					(4								  << QSPI_SSHIFT_SPACE_Pos);
+					(2								  << QSPI_SSHIFT_SPACE_Pos);
 	
 	QSPIx->FCR = 0x1B;
 	if(initStruct->IntEn)
@@ -147,22 +147,34 @@ void QSPI_Command(QSPI_TypeDef * QSPIx, uint8_t cmdMode, QSPI_CmdStructure * cmd
 
 
 /****************************************************************************************************************************************** 
-* 函数名称:	QSPI_Erase()
+* 函数名称:	QSPI_Erase_()
 * 功能说明:	QSPI Flash 擦除
 * 输    入: QSPI_TypeDef * QSPIx	指定要被设置的QSPI接口，有效值包括QSPI0
-*			uint8_t cmd				擦除命令 ，有效值包括 QSPI_CMD_ERASE_SECTOR、QSPI_CMD_ERASE_BLOCK32KB、QSPI_CMD_ERASE_BLOCK64KB
 *			uint32_t addr			要擦除的 SPI Flash 地址
+*			uint16_t block_size		要擦除的块大小，单位为 kbytes，有效值 4、64
 *			uint8_t wait			是否等待 SPI Flash 完成操作操作，1 等待完成   0 立即返回
 * 输    出: 无
 * 注意事项: 若 wait == 0 立即返回，需要在随后调用 QSPI_FlashBusy() 检查 SPI Flash 完成操作后，再执行读、写操作
 ******************************************************************************************************************************************/
-void QSPI_Erase(QSPI_TypeDef * QSPIx, uint8_t cmd, uint32_t addr, uint8_t wait)
+void QSPI_Erase_(QSPI_TypeDef * QSPIx, uint32_t addr, uint16_t block_size, uint8_t wait)
 {
 	QSPI_CmdStructure cmdStruct;
 	QSPI_CmdStructClear(&cmdStruct);
 	
+	uint8_t instruction;
+	switch(block_size)
+	{
+	case 4:
+		instruction = (AddressSize == QSPI_PhaseSize_32bit) ? QSPI_C4B_ERASE_SECTOR    : QSPI_CMD_ERASE_SECTOR;
+		break;
+	
+	case 64:
+		instruction = (AddressSize == QSPI_PhaseSize_32bit) ? QSPI_C4B_ERASE_BLOCK64KB : QSPI_CMD_ERASE_BLOCK64KB;
+		break;
+	}
+	
 	cmdStruct.InstructionMode 	 = QSPI_PhaseMode_1bit;
-	cmdStruct.Instruction 		 = cmd;
+	cmdStruct.Instruction 		 = instruction;
 	cmdStruct.AddressMode 		 = QSPI_PhaseMode_1bit;
 	cmdStruct.AddressSize		 = AddressSize;
 	cmdStruct.Address			 = addr;
@@ -399,6 +411,8 @@ void QSPI_Read_(QSPI_TypeDef * QSPIx, uint32_t addr, uint8_t buff[], uint32_t co
 			buff[i] = QSPIx->DRB;
 		}
 	}
+	
+	QSPI_Abort(QSPIx);
 }
 
 
@@ -460,32 +474,6 @@ void QSPI_QuadSwitch(QSPI_TypeDef * QSPIx, uint8_t on)
 
 
 /****************************************************************************************************************************************** 
-* 函数名称:	QSPI_SendCmd()
-* 功能说明:	QSPI 命令发送，适用于只有命令阶段的情况
-* 输    入: QSPI_TypeDef * QSPIx	指定要被设置的QSPI接口，有效值包括QSPI0
-*			uint8_t cmd				要发送的命令
-* 输    出: 无
-* 注意事项: 无
-******************************************************************************************************************************************/
-void QSPI_SendCmd(QSPI_TypeDef * QSPIx, uint8_t cmd)
-{
-	QSPI_CmdStructure cmdStruct;
-	QSPI_CmdStructClear(&cmdStruct);
-	
-	cmdStruct.InstructionMode 	 = QSPI_PhaseMode_1bit;
-	cmdStruct.Instruction 		 = cmd;
-	cmdStruct.AddressMode 		 = QSPI_PhaseMode_None;
-	cmdStruct.AlternateBytesMode = QSPI_PhaseMode_None;
-	cmdStruct.DummyCycles 		 = 0;
-	cmdStruct.DataMode 			 = QSPI_PhaseMode_None;
-	
-	QSPI_Command(QSPIx, QSPI_Mode_IndirectWrite, &cmdStruct);
-	
-	while(QSPI_Busy(QSPIx)) __NOP();
-}
-
-
-/****************************************************************************************************************************************** 
 * 函数名称:	QSPI_ReadReg()
 * 功能说明:	QSPI Flash 寄存器读取，适用于只有命令、数据阶段，且数据不多于4字节的情况
 * 输    入: QSPI_TypeDef * QSPIx	指定要被设置的QSPI接口，有效值包括QSPI0
@@ -525,7 +513,7 @@ uint32_t QSPI_ReadReg(QSPI_TypeDef * QSPIx, uint8_t cmd, uint8_t n_bytes)
 * 输    入: QSPI_TypeDef * QSPIx	指定要被设置的QSPI接口，有效值包括QSPI0
 *			uint8_t cmd				寄存器写入命令
 *			uint32_t data			要写入寄存器的数据，MSB
-*			uint8_t n_bytes			要写入寄存器的字节数，可取值 1、2、3、4
+*			uint8_t n_bytes			要写入寄存器的字节数，可取值 1、2、3、4、0（用于无数据阶段命令）
 * 输    出: 无
 * 注意事项: 无
 ******************************************************************************************************************************************/
@@ -539,7 +527,7 @@ void QSPI_WriteReg(QSPI_TypeDef * QSPIx, uint8_t cmd, uint32_t data, uint8_t n_b
 	cmdStruct.AddressMode 		 = QSPI_PhaseMode_None;
 	cmdStruct.AlternateBytesMode = QSPI_PhaseMode_None;
 	cmdStruct.DummyCycles 		 = 0;
-	cmdStruct.DataMode 			 = QSPI_PhaseMode_1bit;
+	cmdStruct.DataMode 			 = n_bytes ? QSPI_PhaseMode_1bit : QSPI_PhaseMode_None;
 	cmdStruct.DataCount 		 = n_bytes;
 	
 	QSPI_Command(QSPIx, QSPI_Mode_IndirectWrite, &cmdStruct);
@@ -555,7 +543,7 @@ void QSPI_WriteReg(QSPI_TypeDef * QSPIx, uint8_t cmd, uint32_t data, uint8_t n_b
 * 函数名称:	QSPI_INTEn()
 * 功能说明:	中断使能
 * 输    入: QSPI_TypeDef * QSPIx	指定要被设置的QSPI接口，有效值包括QSPI0
-* 			uint32_t it				interrupt type，可取值 QSPI_IT_ERR、QSPI_IT_DONE、QSPI_IT_FFTHR、QSPI_IT_PSMAT、QSPI_IT_TO 及其“或”
+* 			uint32_t it				interrupt type，可取值 QSPI_IT_ERR、QSPI_IT_DONE、QSPI_IT_FFTHR、QSPI_IT_PSMAT 及其“或”
 * 输    出: 无
 * 注意事项: 无
 ******************************************************************************************************************************************/
@@ -568,7 +556,7 @@ void QSPI_INTEn(QSPI_TypeDef * QSPIx, uint32_t it)
 * 函数名称:	QSPI_INTDis()
 * 功能说明:	中断禁止
 * 输    入: QSPI_TypeDef * QSPIx	指定要被设置的QSPI接口，有效值包括QSPI0
-* 			uint32_t it				interrupt type，可取值 QSPI_IT_ERR、QSPI_IT_DONE、QSPI_IT_FFTHR、QSPI_IT_PSMAT、QSPI_IT_TO 及其“或”
+* 			uint32_t it				interrupt type，可取值 QSPI_IT_ERR、QSPI_IT_DONE、QSPI_IT_FFTHR、QSPI_IT_PSMAT 及其“或”
 * 输    出: 无
 * 注意事项: 无
 ******************************************************************************************************************************************/
@@ -581,7 +569,7 @@ void QSPI_INTDis(QSPI_TypeDef * QSPIx, uint32_t it)
 * 函数名称:	QSPI_INTClr()
 * 功能说明:	中断标志清除
 * 输    入: QSPI_TypeDef * QSPIx	指定要被设置的QSPI接口，有效值包括QSPI0
-* 			uint32_t it				interrupt type，可取值 QSPI_IT_ERR、QSPI_IT_DONE、QSPI_IT_PSMAT、QSPI_IT_TO 及其“或”
+* 			uint32_t it				interrupt type，可取值 QSPI_IT_ERR、QSPI_IT_DONE、QSPI_IT_PSMAT 及其“或”
 * 输    出: 无
 * 注意事项: 无
 ******************************************************************************************************************************************/
@@ -594,11 +582,153 @@ void QSPI_INTClr(QSPI_TypeDef * QSPIx, uint32_t it)
 * 函数名称:	QSPI_INTStat()
 * 功能说明:	中断状态查询
 * 输    入: QSPI_TypeDef * QSPIx	指定要被设置的QSPI接口，有效值包括QSPI0
-* 			uint32_t it				interrupt type，可取值 QSPI_IT_ERR、QSPI_IT_DONE、QSPI_IT_FFTHR、QSPI_IT_PSMAT、QSPI_IT_TO 及其“或”
+* 			uint32_t it				interrupt type，可取值 QSPI_IT_ERR、QSPI_IT_DONE、QSPI_IT_FFTHR、QSPI_IT_PSMAT 及其“或”
 * 输    出: uint32_t				0 中断未发生    非0 中断已发生
 * 注意事项: 无
 ******************************************************************************************************************************************/
 uint32_t QSPI_INTStat(QSPI_TypeDef * QSPIx, uint32_t it)
 {
 	return QSPIx->SR & it;
+}
+
+
+/****************************************************************************************************************************************** 
+* 函数名称:	QSPI_SPI_Write_()
+* 功能说明:	QSPI 用作普通 SPI 写
+* 输    入: QSPI_TypeDef * QSPIx	指定要被设置的QSPI接口，有效值包括QSPI0
+*			uint8_t buff[]			要写的数据
+*			uint32_t count			要写的数据个数
+*			uint8_t data_width		写入使用的数据线个数，有效值包括 1、2、4
+*			uint8_t data_phase		是否在此函数内执行数据阶段；若否，可在后续通过 DMA 实现更高效的写入
+* 输    出: 无
+* 注意事项: 无
+******************************************************************************************************************************************/
+void QSPI_SPI_Write_(QSPI_TypeDef * QSPIx, uint8_t buff[], uint32_t count, uint8_t data_width, uint8_t data_phase)
+{
+	QSPI_CmdStructure cmdStruct;
+	QSPI_CmdStructClear(&cmdStruct);
+	
+	cmdStruct.InstructionMode 	 = QSPI_PhaseMode_None;
+	cmdStruct.AddressMode 		 = QSPI_PhaseMode_None;
+	cmdStruct.AlternateBytesMode = QSPI_PhaseMode_None;
+	cmdStruct.DummyCycles 		 = 0;
+	cmdStruct.DataMode 			 = (data_width == 1) ? QSPI_PhaseMode_1bit : ((data_width == 2) ? QSPI_PhaseMode_2bit : QSPI_PhaseMode_4bit);
+	cmdStruct.DataCount 		 = count;
+	
+	QSPI_Command(QSPIx, QSPI_Mode_IndirectWrite, &cmdStruct);
+	
+	if(data_phase == 0)
+		return;
+	
+	if((uint32_t)buff % 4 == 0)	// word aligned
+	{
+		uint32_t n_word = count / 4;
+		
+		for(int i = 0; i < n_word; i++)
+		{
+			uint32_t * p_word = (uint32_t *)buff;
+			
+			while(QSPI_FIFOSpace(QSPIx) < 4) __NOP();
+			
+			QSPIx->DRW = p_word[i];
+		}
+		
+		if((count % 4) / 2)
+		{
+			uint16_t * p_half = (uint16_t *)&buff[n_word * 4];
+			
+			while(QSPI_FIFOSpace(QSPIx) < 2) __NOP();
+			
+			QSPIx->DRH = p_half[0];
+		}
+		
+		if(count % 2)
+		{
+			while(QSPI_FIFOSpace(QSPIx) < 1) __NOP();
+			
+			QSPIx->DRB = buff[count - 1];
+		}
+	}
+	else
+	{
+		for(int i = 0; i < count; i++)
+		{
+			while(QSPI_FIFOSpace(QSPIx) < 1) __NOP();
+			
+			QSPIx->DRB = buff[i];
+		}
+	}
+	
+	while(QSPI_Busy(QSPIx)) __NOP();
+}
+
+
+/****************************************************************************************************************************************** 
+* 函数名称:	QSPI_SPI_Read_()
+* 功能说明:	QSPI 用作普通 SPI 读
+* 输    入: QSPI_TypeDef * QSPIx	指定要被设置的QSPI接口，有效值包括QSPI0
+*			uint8_t buff[]			读取到的数据写入此数组中
+*			uint32_t count			要读取数据的个数
+*			uint8_t data_width		读取使用的数据线个数，有效值包括 1、2、4
+*			uint8_t data_phase		是否在此函数内执行数据阶段；若否，可在后续通过 DMA 实现更高效的读取
+* 输    出: 无
+* 注意事项: 无
+******************************************************************************************************************************************/
+void QSPI_SPI_Read_(QSPI_TypeDef * QSPIx, uint8_t buff[], uint32_t count, uint8_t data_width, uint8_t data_phase)
+{
+	QSPI_CmdStructure cmdStruct;
+	QSPI_CmdStructClear(&cmdStruct);
+	
+	cmdStruct.InstructionMode 	 = QSPI_PhaseMode_None;
+	cmdStruct.AddressMode 		 = QSPI_PhaseMode_None;
+	cmdStruct.AlternateBytesMode = QSPI_PhaseMode_None;
+	cmdStruct.DummyCycles 		 = 0;
+	cmdStruct.DataMode 			 = (data_width == 1) ? QSPI_PhaseMode_1bit : ((data_width == 2) ? QSPI_PhaseMode_2bit : QSPI_PhaseMode_4bit);
+	cmdStruct.DataCount 		 = count;
+	
+	QSPI_Command(QSPIx, QSPI_Mode_IndirectRead, &cmdStruct);
+	
+	if(data_phase == 0)
+		return;
+	
+	if((uint32_t)buff % 4 == 0)	// word aligned
+	{
+		uint32_t n_word = count / 4;
+		
+		for(int i = 0; i < n_word; i++)
+		{
+			uint32_t * p_word = (uint32_t *)buff;
+			
+			while(QSPI_FIFOCount(QSPIx) < 4) __NOP();
+			
+			p_word[i] = QSPIx->DRW;
+		}
+		
+		if((count % 4) / 2)
+		{
+			uint16_t * p_half = (uint16_t *)&buff[n_word * 4];
+			
+			while(QSPI_FIFOCount(QSPIx) < 2) __NOP();
+			
+			p_half[0] = QSPIx->DRH;
+		}
+		
+		if(count % 2)
+		{
+			while(QSPI_FIFOCount(QSPIx) < 1) __NOP();
+			
+			buff[count - 1] = QSPIx->DRB;
+		}
+	}
+	else
+	{
+		for(int i = 0; i < count; i++)
+		{
+			while(QSPI_FIFOCount(QSPIx) < 1) __NOP();
+			
+			buff[i] = QSPIx->DRB;
+		}
+	}
+	
+	QSPI_Abort(QSPIx);
 }

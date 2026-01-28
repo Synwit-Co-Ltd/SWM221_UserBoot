@@ -39,7 +39,7 @@
 
 #define __HSI		( 8000000UL)		//高速内部时钟
 #define __LSI		(   32000UL)		//低速内部时钟
-#define __HSE		( 8000000UL)		//高速外部时钟
+#define __HSE		(12000000UL)		//高速外部时钟
 #define __LSE		(   32768UL)		//低速外部时钟
 
 
@@ -48,7 +48,7 @@
  *****************************************************************************************/ 
 #define SYS_PLL_SRC   	SYS_CLK_XTAL	//可取值SYS_CLK_8MHz、SYS_CLK_XTAL
 
-#define PLL_IN_DIV		2
+#define PLL_IN_DIV		3
 
 #define PLL_FB_DIV		15
 
@@ -149,8 +149,9 @@ void SystemInit(void)
 	
 	Flash_Param_at_xMHz(CyclesPerUs);
 	
-	FMC->CACHE = (1 << FMC_CACHE_CEN_Pos) | FMC_CACHE_CCLR_Msk;	// 清除 Cache
-	__NOP(); __NOP(); __NOP(); __NOP(); __NOP(); __NOP(); __NOP();
+	Cache_Clear();						// Cache Clear
+	
+	FMC->CACHE |= FMC_CACHE_CEN_Msk;	// Cache Enable
 	
 	PORTB->PULLD &= ~((1 << PIN10) | (1 << PIN11));
 	PORTB->PULLU &= ~((1 << PIN12) | (1 << PIN15));
@@ -192,8 +193,8 @@ void switchOnXTAL(void)
 	PORTB->PULLU &= ~((1 << PIN11) | (1 << PIN12));
 	PORTB->PULLD &= ~((1 << PIN11) | (1 << PIN12));
 	
-	PORT_Init(PORTB, PIN11, PORTB_PIN11_XTAL_IN,  0);
-	PORT_Init(PORTB, PIN12, PORTB_PIN12_XTAL_OUT, 0);
+	PORT_Init(PORTB, PIN11, PORTB_PIN11_XTAL_OUT, 0);
+	PORT_Init(PORTB, PIN12, PORTB_PIN12_XTAL_IN,  0);
 	
 	SYS->XTALCR |= (1 << SYS_XTALCR_ON_Pos) | (1 << SYS_XTALCR_DET_Pos);
 }
